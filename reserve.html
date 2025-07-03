@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Financial Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+      max-width: 800px;
+      margin: 30px auto;
+      padding: 20px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    body.dark {
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+    }
+    h1 {
+      text-align: center;
+    }
+    input, select, button {
+      padding: 8px;
+      margin: 5px 0;
+      font-size: 16px;
+    }
+    .entry {
+      border-bottom: 1px solid #ccc;
+      padding: 6px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .income { color: green; }
+    .expense { color: red; }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .toggle-theme {
+      float: right;
+      margin-top: -40px;
+      background-color: #888;
+    }
+    .totals, #oneMonthNetResult, #forecastResult {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌍 Financial Tracker</h1>
+  <button class="toggle-theme" onclick="toggleDark()">🌗 Toggle Theme</button>
+
+  <label>Default Currency:
+    <select id="defaultCurrency" onchange="updateAll()">
+      <option value="USD" selected>USD</option>
+      <option value="EUR">EUR</option>
+      <option value="GBP">GBP</option>
+    </select>
+  </label><br>
+
+  <input id="name" placeholder="Name (e.g., Netflix)" />
+  <input id="amount" type="number" placeholder="Amount" />
+  <select id="currency">
+    <option value="USD">USD</option>
+    <option value="EUR">EUR</option>
+    <option value="GBP">GBP</option>
+  </select>
+  <select id="period">
+    <option value="monthly">Monthly</option>
+    <option value="yearly">Yearly</option>
+    <option value="one-time">One-Time</option>
+  </select>
+  <select id="type">
+    <option value="expense">Expense</option>
+    <option value="income">Income</option>
+  </select>
+  <button onclick="addEntry()">➕ Add</button>
+
+  <div id="entries"></div>
+
+  <div class="totals" id="totals"></div>
+
+  <button onclick="calculateOneMonthNet()">🧮 Show Net After 1 Month</button>
+  <div id="oneMonthNetResult"></div>
+
+  <h3>📅 Forecast Balance</h3>
+  <select id="forecastMonth">
+    <option value="0">January</option><option value="1">February</option>
+    <option value="2">March</option><option value="3">April</option>
+    <option value="4">May</option><option value="5">June</option>
+    <option value="6">July</option><option value="7">August</option>
+    <option value="8">September</option><option value="9">October</option>
+    <option value="10">November</option><option value="11">December</option>
+  </select>
+  <input type="number" id="forecastYear" value="2025" style="width:100px" />
+  <button onclick="forecastBalance()">📈 Predict</button>
+  <div id="forecastResult"></div>
+
+  <br><br>
+  <button onclick="downloadExcel()">📁 Download Excel</button>
+
+  <script>
+    const entries = [];
+    const exchangeRates = { USD: 1, EUR: 1.1, GBP: 1.25 };
+
+    function toggleDark() {
+      document.body.classList.toggle("dark");
+    }
+
+    function convert(amount, fromCurrency, toCurrency) {
+      return (amount / exchangeRates[fromCurrency]) * exchangeRates[toCurrency];
+    }
+
+    function addEntry() {
+      const name = document.getElementById("name").value.trim();
+      const amount = parseFloat(document.getElementById("amount").value);
+      const currency = document.getElementById("currency").value;
+      const period = document.getElementById("period").value;
+      const type = document.getElementById("type").value;
+
+      if (!name || isNaN(amount)) return alert("Enter valid data.");
+
+      entries.push({ name, amount, currency, period, type });
+      renderEntries();
+      updateAll();
+
+      document.getElementById("name").value = "";
+      document.getElementById("amount").value = "";
+    }
+
+    function removeEntry(index) {
+      entries.splice(index, 1);
+      renderEntries();
+      updateAll();
+    }
+
+    function renderEntries() {
+      const container = document.getElementById("entries");
+      container.innerHTML = "";
+      entries.forEach((e, i) => {
+        container.innerHTML += `
+          <div class="entry ${e.type}">
+            ${e.name} (${e.type}, ${e.period}, ${e.currency} ${e.amount})
+            <button onclick="removeEntry(${i})">❌</button>
+          </div>`;
+      });
+    }
+
+    function updateAll() {
+      updateTotals();
+      document.getElementById("oneMonthNetResult").innerText = "";
+      document.getElementById("forecastResult").innerText = "";
+    }
+
+    function updateTotals() {
+      const currency = document.getElementById("defaultCurrency").value;
+      let income = 0, expense = 0;
+
+      entries.forEach(e => {
+        let amt = convert(e.amount, e.currency, currency);
+        if (e.period === "yearly") amt = amt / 12;
+        if (e.period === "one-time") amt = amt; // count as-is for 1 month
+
+        if (e.type === "income") income += amt;
+        else expense += amt;
+      });
+
+      document.getElementById("totals").innerText =
+        `💵 Total Income (monthly impact): ${income.toFixed(2)} ${currency}
+         \n💸 Total Expenses (monthly impact): ${expense.toFixed(2)} ${currency}
+         \n📊 Net Monthly: ${(income - expense).toFixed(2)} ${currency}`;
+    }
+
+    function calculateOneMonthNet() {
+      const currency = document.getElementById("defaultCurrency").value;
+      let income = 0, expense = 0;
+
+      entries.forEach(e => {
+        let amt = convert(e.amount, e.currency, currency);
+        if (e.period === "yearly") amt = amt / 12;
+        if (e.period === "one-time") amt = amt;
+
+        if (e.type === "income") income += amt;
+        else expense += amt;
+      });
+
+      const net = income - expense;
+      document.getElementById("oneMonthNetResult").innerText =
+        `✅ After 1 month, your net will be: ${net.toFixed(2)} ${currency}`;
+    }
+
+    function forecastBalance() {
+      const month = parseInt(document.getElementById("forecastMonth").value);
+      const year = parseInt(document.getElementById("forecastYear").value);
+      const currency = document.getElementById("defaultCurrency").value;
+      const now = new Date();
+      const future = new Date(year, month);
+      if (future < now) {
+        document.getElementById("forecastResult").innerText = "❌ Please select a future date.";
+        return;
+      }
+
+      const monthsDiff = (year - now.getFullYear()) * 12 + (month - now.getMonth());
+      let income = 0, expense = 0;
+
+      entries.forEach(e => {
+        let amt = convert(e.amount, e.currency, currency);
+        if (e.period === "monthly") amt *= monthsDiff;
+        else if (e.period === "yearly") amt *= (monthsDiff / 12);
+        else if (e.period === "one-time") amt = amt;
+
+        if (e.type === "income") income += amt;
+        else expense += amt;
+      });
+
+      const forecast = income - expense;
+      document.getElementById("forecastResult").innerText =
+        `📅 Forecast by ${future.toLocaleString('default', { month: 'long' })} ${year}: ${forecast.toFixed(2)} ${currency}`;
+    }
+
+    function downloadExcel() {
+      if (entries.length === 0) return alert("No entries to export.");
+
+      const data = entries.map(e => ({
+        Name: e.name,
+        Amount: e.amount,
+        Currency: e.currency,
+        Period: e.period,
+        Type: e.type
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Finance");
+      XLSX.writeFile(wb, "financial_tracker.xlsx");
+    }
+  </script>
+</body>
+</html>
