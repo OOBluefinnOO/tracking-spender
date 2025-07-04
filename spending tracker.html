@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Financial Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      background-color: #f7f9fb;
+      color: #333;
+      display: flex;
+      transition: background 0.3s, color 0.3s;
+      min-height: 100vh;
+    }
+    body.dark {
+      background-color: #0f172a;
+      color: #e2e8f0;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      width: 280px; /* Wider sidebar */
+      background: #1e293b;
+      color: white;
+      height: 100vh;
+      padding: 30px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      user-select: none;
+    }
+    #sidebar h2 {
+      margin-bottom: 28px;
+      font-size: 24px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 1.2px;
+    }
+    #sidebar button {
+      background: none;
+      border: none;
+      color: white;
+      text-align: left;
+      font-size: 18px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.25s ease;
+      white-space: nowrap;
+    }
+    #sidebar button:hover {
+      background-color: #334155;
+    }
+
+    /* Main content */
+    #main {
+      flex-grow: 1;
+      padding: 40px 50px;
+      background: #fff;
+      overflow-y: auto;
+      transition: background 0.3s, color 0.3s;
+      text-align: center;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    body.dark #main {
+      background-color: #1e293b;
+    }
+
+    /* Inputs and selects */
+    input, select, button {
+      margin: 10px 10px 20px 10px;
+      padding: 14px 18px;
+      border: 1.8px solid #ccc;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      min-width: 180px;
+      transition: border-color 0.3s;
+    }
+    input:focus, select:focus {
+      border-color: #3b82f6;
+      outline: none;
+    }
+    button {
+      background-color: #3b82f6;
+      color: white;
+      cursor: pointer;
+      font-weight: 900;
+      min-width: 200px;
+      border: none;
+      transition: background 0.25s;
+      letter-spacing: 1.1px;
+    }
+    button:hover {
+      background-color: #2563eb;
+    }
+
+    /* Entry cards */
+    .entry {
+      background: #f1f5f9;
+      padding: 18px 20px;
+      margin: 14px auto;
+      border-left: 8px solid #3b82f6; /* default */
+      border-radius: 12px;
+      max-width: 720px;
+      text-align: left;
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: background 0.3s;
+    }
+    .entry.income {
+      border-left-color: #22c55e; /* green */
+      background-color: #e6f4ea;
+      color: #14532d;
+    }
+    .entry.expense {
+      border-left-color: #ef4444; /* red */
+      background-color: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* Headings */
+    h2, h4 {
+      margin-top: 0;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 1.2px;
+    }
+    h2 {
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    h4 {
+      font-size: 22px;
+      margin-top: 28px;
+      margin-bottom: 14px;
+    }
+
+    /* Labels */
+    label {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 10px 16px 10px 10px;
+      user-select: none;
+    }
+
+    /* Chart canvas */
+    canvas {
+      background: #f9fafb;
+      border-radius: 14px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      padding: 18px;
+      margin-top: 24px;
+      max-width: 100%;
+    }
+
+    /* Tabs */
+    .hidden {
+      display: none;
+    }
+
+    /* Comparison results */
+    #comparisonResult {
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 16px;
+      text-align: center;
+      user-select: none;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 900px) {
+      body {
+        flex-direction: column;
+      }
+      #sidebar {
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 10px 5px;
+        gap: 8px;
+      }
+      #sidebar h2 {
+        display: none;
+      }
+      #sidebar button {
+        font-size: 16px;
+        white-space: normal;
+        flex: 1 1 auto;
+        text-align: center;
+      }
+      #main {
+        padding: 20px;
+      }
+      input, select, button {
+        min-width: 140px;
+        font-size: 16px;
+        padding: 12px 14px;
+      }
+      .entry {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>☰ Menu</h2>
+    <button onclick="showTab('home')">🏠 Home</button>
+    <button onclick="showTab('charts')">📊 Charts</button>
+    <button onclick="showTab('compare')">📋 Compare</button>
+    <button onclick="toggleDarkMode()">🌓 Toggle Theme</button>
+    <button onclick="exportToExcel()">📥 Export to Excel</button>
+  </div>
+
+  <div id="main">
+    <!-- Home Tab -->
+    <div id="homeTab">
+      <h2>Financial Tracker</h2>
+
+      <input id="name" placeholder="Name (e.g. Rent, Salary)" autocomplete="off" />
+      <input id="amount" type="number" placeholder="Amount" min="0" step="0.01" />
+      
+      <select id="frequency" title="Select Frequency">
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+        <option value="once">One-Time</option>
+      </select>
+      
+      <select id="type" title="Select Income or Expense">
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+
+      <select id="currency" title="Select Currency">
+        <option value="USD" selected>USD - $</option>
+        <option value="EUR">EUR - €</option>
+        <option value="GBP">GBP - £</option>
+        <option value="JPY">JPY - ¥</option>
+        <option value="AUD">AUD - A$</option>
+        <option value="CAD">CAD - C$</option>
+        <option value="CHF">CHF - CHF</option>
+        <option value="CNY">CNY - ¥</option>
+        <option value="INR">INR - ₹</option>
+      </select>
+
+      <select id="month" title="Select Month"></select>
+
+      <input id="year" type="number" placeholder="Year" value="2025" min="1900" max="2100" />
+
+      <button onclick="addEntry()">Add Entry</button>
+
+      <div id="entries" aria-live="polite" aria-label="List of financial entries"></div>
+    </div>
+
+    <!-- Charts Tab -->
+    <div id="chartsTab" class="hidden">
+      <h2>Summary Chart</h2>
+      <canvas id="summaryChart" width="400" height="250" aria-label="Income and Expense Pie Chart" role="img"></canvas>
+    </div>
+
+    <!-- Compare Tab -->
+    <div id="compareTab" class="hidden">
+      <h2>Compare Two Months</h2>
+      <div style="margin-bottom: 12px;">
+        <label for="compMonthA">Month A:</label>
+        <select id="compMonthA" title="Select first month for comparison"></select>
+        <input id="compYearA" type="number" value="2025" min="1900" max="2100" style="width:100px;" />
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label for="compMonthB">Month B:</label>
+        <select id="compMonthB" title="Select second month for comparison"></select>
+        <input id="compYearB" type="number" value="2025" min="1900" max="2100" style="width:100px;" />
+      </div>
+      <button onclick="compareMonths()">Compare</button>
+      <div id="comparisonResult"></div>
+      <canvas id="comparisonChart" width="400" height="250" aria-label="Comparison Bar Chart" role="img"></canvas>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    const entries = [];
+    const monthNames = [...Array(12).keys()].map(m => new Date(0, m).toLocaleString('default', { month: 'long' }));
+
+    let summaryChartInstance = null;
+    let comparisonChartInstance = null;
+
+    // Helper functions
+    function capitalize(str) {
+      if (!str) return "";
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function formatCurrency(amount, currency = 'USD') {
+      try {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+      } catch {
+        // Fallback in case of invalid currency code
+        return `${currency} ${amount.toFixed(2)}`;
+      }
+    }
+
+    // Populate month selectors
+    function populateMonths() {
+      const monthSelects = [
+        document.getElementById("month"),
+        document.getElementById("compMonthA"),
+        document.getElementById("compMonthB"),
+      ];
+      monthSelects.forEach(select => {
+        select.innerHTML = "";
+        monthNames.forEach((name, idx) => {
+          const option = document.createElement("option");
+          option.value = idx;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+      });
+    }
+
+    populateMonths();
+
+    // Show tab handler
+    function showTab(tabName) {
+      document.getElementById("homeTab").classList.toggle("hidden", tabName !== "home");
+      document.getElementById("chartsTab").classList.toggle("hidden", tabName !== "charts");
+      document.getElementById("compareTab").classList.toggle("hidden", tabName !== "compare");
+
+      if (tabName === "charts") {
+        updateSummaryChart();
+      } else if (tabName === "compare") {
+        clearComparison();
+      }
+    }
+
+    // Dark mode toggle
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark");
+    }
+
+    // Add new entry
+    function addEntry() {
+      const name = document.getElementById("name").value.trim();
+      const amountRaw = parseFloat(document.getElementById("amount").value);
+      const frequency = document.getElementById("frequency").value;
+      const type = document.getElementById("type").value;
+      const currency = document.getElementById("currency").value;
+      const month = parseInt(document.getElementById("month").value);
+      const year = parseInt(document.getElementById("year").value);
+
+      if (!name) {
+        alert("Please enter a name.");
+        return;
+      }
+      if (isNaN(amountRaw) || amountRaw <= 0) {
+        alert("Please enter a valid amount greater than zero.");
+        return;
+      }
+      if (isNaN(month) || month < 0 || month > 11) {
+        alert("Please select a valid month.");
+        return;
+      }
+      if (isNaN(year) || year < 1900 || year > 2100) {
+        alert("Please enter a valid year between 1900 and 2100.");
+        return;
+      }
+
+      const entry = {
+        name,
+        amount: amountRaw,
+        frequency,
+        type,
+        currency,
+        month,
+        year,
+      };
+
+      entries.push(entry);
+
+      // Clear inputs after adding
+      document.getElementById("name").value = "";
+      document.getElementById("amount").value = "";
+      document.getElementById("frequency").value = "monthly";
+      document.getElementById("type").value = "income";
+      document.getElementById("currency").value = "USD";
+      document.getElementById("month").value = new Date().getMonth();
+      document.getElementById("year").value = new Date().getFullYear();
+
+      renderEntries();
+    }
+
+    // Render the entries list
+    function renderEntries() {
+      const container = document.getElementById("entries");
+      if (entries.length === 0) {
+        container.innerHTML = "<p><i>No entries yet.</i></p>";
+        return;
+      }
+      container.innerHTML = entries.map(e =>
+        `<div class="entry ${e.type}" tabindex="0" role="article" aria-label="${capitalize(e.type)} entry for ${e.name}, amount ${formatCurrency(e.amount, e.currency)}, frequency ${capitalize(e.frequency)}, date ${monthNames[e.month]} ${e.year}">
+          <div><strong>Name:</strong> ${e.name}</div>
+          <div><strong>Type:</strong> ${capitalize(e.type)}</div>
+          <div><strong>Frequency:</strong> ${capitalize(e.frequency)}</div>
+          <div><strong>Amount:</strong> ${formatCurrency(e.amount, e.currency)}</div>
+          <div><strong>Date:</strong> ${monthNames[e.month]} ${e.year}</div>
+        </div>`
+      ).join("");
+    }
+
+    // Update summary chart
+    function updateSummaryChart() {
+      const ctx = document.getElementById("summaryChart").getContext("2d");
+      const totalIncome = entries
+        .filter(e => e.type === "income")
+        .reduce((acc, cur) => acc + cur.amount, 0);
+      const totalExpense = entries
+        .filter(e => e.type === "expense")
+        .reduce((acc, cur) => acc + cur.amount, 0);
+
+      const data = {
+        labels: ["Income", "Expense"],
+        datasets: [{
+          data: [totalIncome, totalExpense],
+          backgroundColor: ["#22c55e", "#ef4444"],
+          borderWidth: 0,
+        }],
+      };
+
+      if (summaryChartInstance) {
+        summaryChartInstance.data = data;
+        summaryChartInstance.update();
+      } else {
+        summaryChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data,
+          options: {
+            plugins: {
+              legend: { position: 'bottom', labels: { font: { size: 18, weight: '700' } } },
+              tooltip: { enabled: true },
+            },
+            cutout: '70%',
+            responsive: true,
+            maintainAspectRatio: false,
+          }
+        });
+      }
+    }
+
+    // Compare two months
+    function compareMonths() {
+      const monthA = parseInt(document.getElementById("compMonthA").value);
+      const yearA = parseInt(document.getElementById("compYearA").value);
+      const monthB = parseInt(document.getElementById("compMonthB").value);
+      const yearB = parseInt(document.getElementById("compYearB").value);
+      const resultDiv = document.getElementById("comparisonResult");
+      const ctx = document.getElementById("comparisonChart").getContext("2d");
+
+      if ([monthA, yearA, monthB, yearB].some(v => isNaN(v))) {
+        alert("Please select valid months and years for comparison.");
+        return;
+      }
+
+      function totalByType(m, y, t) {
+        return entries
+          .filter(e => e.month === m && e.year === y && e.type === t)
+          .reduce((acc, cur) => acc + cur.amount, 0);
+      }
+
+      const incomeA = totalByType(monthA, yearA, "income");
+      const expenseA = totalByType(monthA, yearA, "expense");
+      const incomeB = totalByType(monthB, yearB, "income");
+      const expenseB = totalByType(monthB, yearB, "expense");
+
+      const diffIncome = incomeB - incomeA;
+      const diffExpense = expenseB - expenseA;
+
+      const incomeDiffText = diffIncome === 0 ? "No change" :
+        (diffIncome > 0 ? `Income increased by ${formatCurrency(diffIncome)}` : `Income decreased by ${formatCurrency(-diffIncome)}`);
+      const expenseDiffText = diffExpense === 0 ? "No change" :
+        (diffExpense > 0 ? `Expenses increased by ${formatCurrency(diffExpense)}` : `Expenses decreased by ${formatCurrency(-diffExpense)}`);
+
+      resultDiv.innerHTML = `<p>${monthNames[monthA]} ${yearA} vs ${monthNames[monthB]} ${yearB}</p>
+                             <p>${incomeDiffText}</p>
+                             <p>${expenseDiffText}</p>`;
+
+      // Bar chart data
+      const data = {
+        labels: [monthNames[monthA] + " " + yearA, monthNames[monthB] + " " + yearB],
+        datasets: [
+          {
+            label: 'Income',
+            data: [incomeA, incomeB],
+            backgroundColor: "#22c55e",
+          },
+          {
+            label: 'Expense',
+            data: [expenseA, expenseB],
+            backgroundColor: "#ef4444",
+          }
+        ]
+      };
+
+      if (comparisonChartInstance) {
+        comparisonChartInstance.data = data;
+        comparisonChartInstance.update();
+      } else {
+        comparisonChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: 'bottom', labels: { font: { size: 16, weight: '700' } } },
+              tooltip: { enabled: true },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { font: { size: 14 } }
+              },
+              x: {
+                ticks: { font: { size: 14 } }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // Clear comparison results and chart
+    function clearComparison() {
+      document.getElementById("comparisonResult").innerHTML = "";
+      if (comparisonChartInstance) {
+        comparisonChartInstance.destroy();
+        comparisonChartInstance = null;
+      }
+    }
+
+    // Export entries to Excel
+    function exportToExcel() {
+      if (entries.length === 0) {
+        alert("No entries to export!");
+        return;
+      }
+      // Prepare worksheet data
+      const wsData = [
+        ["Name", "Type", "Frequency", "Amount", "Currency", "Month", "Year"]
+      ];
+      entries.forEach(e => {
+        wsData.push([
+          e.name,
+          capitalize(e.type),
+          capitalize(e.frequency),
+          e.amount,
+          e.currency,
+          monthNames[e.month],
+          e.year
+        ]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Financial Data");
+
+      XLSX.writeFile(wb, "financial_data.xlsx");
+    }
+
+    // Initialize month and year inputs with current date
+    window.onload = () => {
+      document.getElementById("month").value = new Date().getMonth();
+      document.getElementById("year").value = new Date().getFullYear();
+      document.getElementById("compMonthA").value = new Date().getMonth();
+      document.getElementById("compYearA").value = new Date().getFullYear();
+      document.getElementById("compMonthB").value = new Date().getMonth();
+      document.getElementById("compYearB").value = new Date().getFullYear();
+
+      renderEntries();
+    };
+  </script>
+</body>
+</html>
