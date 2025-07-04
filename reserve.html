@@ -4,245 +4,276 @@
   <meta charset="UTF-8" />
   <title>Financial Tracker</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: #f9f9f9;
+      margin: 0;
+      background-color: #f7f9fb;
       color: #333;
-      max-width: 800px;
-      margin: 30px auto;
-      padding: 20px;
-      transition: background-color 0.3s, color 0.3s;
+      display: flex;
+      transition: background 0.3s, color 0.3s;
     }
     body.dark {
-      background-color: #1e1e1e;
-      color: #f0f0f0;
+      background-color: #0f172a;
+      color: #e2e8f0;
     }
-    h1 {
-      text-align: center;
+    #sidebar {
+      width: 240px;
+      background: #1e293b;
+      color: white;
+      height: 100vh;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #sidebar h2 { margin-bottom: 24px; font-size: 20px; }
+    #sidebar button {
+      background: none;
+      border: none;
+      color: white;
+      text-align: left;
+      font-size: 16px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    #sidebar button:hover { background-color: #334155; }
+    #main {
+      flex-grow: 1;
+      padding: 30px;
+      background: #fff;
+      overflow-y: auto;
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark #main {
+      background-color: #1e293b;
     }
     input, select, button {
-      padding: 8px;
-      margin: 5px 0;
-      font-size: 16px;
+      margin: 8px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
     }
-    .entry {
-      border-bottom: 1px solid #ccc;
-      padding: 6px 0;
-      display: flex;
-      justify-content: space-between;
-    }
-    .income { color: green; }
-    .expense { color: red; }
     button {
-      background-color: #4CAF50;
+      background-color: #3b82f6;
       color: white;
-      border: none;
-      border-radius: 4px;
       cursor: pointer;
     }
-    button:hover {
-      background-color: #45a049;
+    button:hover { background-color: #2563eb; }
+    .entry {
+      background: #f1f5f9;
+      padding: 10px;
+      margin: 8px 0;
+      border-left: 4px solid #3b82f6;
+      border-radius: 6px;
     }
-    .toggle-theme {
-      float: right;
-      margin-top: -40px;
-      background-color: #888;
-    }
-    .totals, #oneMonthNetResult, #forecastResult {
-      margin-top: 20px;
-      font-weight: bold;
+    .hidden { display: none; }
+    h2, h4 { margin-top: 0; }
+    canvas {
+      background: #f9fafb;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.05);
+      padding: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>🌍 Financial Tracker</h1>
-  <button class="toggle-theme" onclick="toggleDark()">🌗 Toggle Theme</button>
+  <div id="sidebar">
+    <h2>☰ Menu</h2>
+    <button onclick="showTab('home')">🏠 Home</button>
+    <button onclick="showTab('charts')">📊 Charts</button>
+    <button onclick="showTab('compare')">📋 Compare</button>
+    <button onclick="toggleDarkMode()">🌓 Toggle Theme</button>
+    <button onclick="exportToExcel()">📥 Export to Excel</button>
+  </div>
+  <div id="main">
+    <!-- Home Tab -->
+    <div id="homeTab">
+      <h2>Financial Tracker</h2>
+      <input id="name" placeholder="Name" />
+      <input id="amount" type="number" placeholder="Amount" />
+      <select id="type">
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+      <select id="month"></select>
+      <input id="year" type="number" placeholder="Year" value="2025" />
+      <button onclick="addEntry()">Add</button>
+      <div id="entries"></div>
+    </div>
 
-  <label>Default Currency:
-    <select id="defaultCurrency" onchange="updateAll()">
-      <option value="USD" selected>USD</option>
-      <option value="EUR">EUR</option>
-      <option value="GBP">GBP</option>
-    </select>
-  </label><br>
+    <!-- Charts Tab -->
+    <div id="chartsTab" class="hidden">
+      <h2>Charts</h2>
+      <canvas id="summaryChart" width="400" height="200"></canvas>
+    </div>
 
-  <input id="name" placeholder="Name (e.g., Netflix)" />
-  <input id="amount" type="number" placeholder="Amount" />
-  <select id="currency">
-    <option value="USD">USD</option>
-    <option value="EUR">EUR</option>
-    <option value="GBP">GBP</option>
-  </select>
-  <select id="period">
-    <option value="monthly">Monthly</option>
-    <option value="yearly">Yearly</option>
-    <option value="one-time">One-Time</option>
-  </select>
-  <select id="type">
-    <option value="expense">Expense</option>
-    <option value="income">Income</option>
-  </select>
-  <button onclick="addEntry()">➕ Add</button>
-
-  <div id="entries"></div>
-
-  <div class="totals" id="totals"></div>
-
-  <button onclick="calculateOneMonthNet()">🧮 Show Net After 1 Month</button>
-  <div id="oneMonthNetResult"></div>
-
-  <h3>📅 Forecast Balance</h3>
-  <select id="forecastMonth">
-    <option value="0">January</option><option value="1">February</option>
-    <option value="2">March</option><option value="3">April</option>
-    <option value="4">May</option><option value="5">June</option>
-    <option value="6">July</option><option value="7">August</option>
-    <option value="8">September</option><option value="9">October</option>
-    <option value="10">November</option><option value="11">December</option>
-  </select>
-  <input type="number" id="forecastYear" value="2025" style="width:100px" />
-  <button onclick="forecastBalance()">📈 Predict</button>
-  <div id="forecastResult"></div>
-
-  <br><br>
-  <button onclick="downloadExcel()">📁 Download Excel</button>
+    <!-- Compare Tab -->
+    <div id="compareTab" class="hidden">
+      <h2>Compare Two Months</h2>
+      <label>Month A:
+        <select id="compMonthA"></select>
+        <input id="compYearA" type="number" value="2025">
+      </label><br>
+      <label>Month B:
+        <select id="compMonthB"></select>
+        <input id="compYearB" type="number" value="2025">
+      </label><br>
+      <button onclick="compareMonths()">Compare</button>
+      <div id="comparisonResult"></div>
+      <canvas id="comparisonChart" width="400" height="200"></canvas>
+    </div>
+  </div>
 
   <script>
     const entries = [];
-    const exchangeRates = { USD: 1, EUR: 1.1, GBP: 1.25 };
+    let comparisonChartInstance = null;
 
-    function toggleDark() {
-      document.body.classList.toggle("dark");
+    function showTab(tab) {
+      document.getElementById('homeTab').classList.add('hidden');
+      document.getElementById('chartsTab').classList.add('hidden');
+      document.getElementById('compareTab').classList.add('hidden');
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+      if (tab === 'charts') drawChart();
     }
 
-    function convert(amount, fromCurrency, toCurrency) {
-      return (amount / exchangeRates[fromCurrency]) * exchangeRates[toCurrency];
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark');
     }
 
     function addEntry() {
-      const name = document.getElementById("name").value.trim();
+      const name = document.getElementById("name").value;
       const amount = parseFloat(document.getElementById("amount").value);
-      const currency = document.getElementById("currency").value;
-      const period = document.getElementById("period").value;
       const type = document.getElementById("type").value;
+      const month = parseInt(document.getElementById("month").value);
+      const year = parseInt(document.getElementById("year").value);
 
       if (!name || isNaN(amount)) return alert("Enter valid data.");
 
-      entries.push({ name, amount, currency, period, type });
+      entries.push({ name, amount, type, month, year });
       renderEntries();
-      updateAll();
-
       document.getElementById("name").value = "";
       document.getElementById("amount").value = "";
     }
 
-    function removeEntry(index) {
-      entries.splice(index, 1);
-      renderEntries();
-      updateAll();
-    }
-
     function renderEntries() {
       const container = document.getElementById("entries");
-      container.innerHTML = "";
-      entries.forEach((e, i) => {
-        container.innerHTML += `
-          <div class="entry ${e.type}">
-            ${e.name} (${e.type}, ${e.period}, ${e.currency} ${e.amount})
-            <button onclick="removeEntry(${i})">❌</button>
-          </div>`;
-      });
+      container.innerHTML = entries.map(e =>
+        `<div class='entry'><strong>${e.name}</strong> - ${e.type} - ${e.amount} - ${e.year}/${e.month + 1}</div>`
+      ).join("");
     }
 
-    function updateAll() {
-      updateTotals();
-      document.getElementById("oneMonthNetResult").innerText = "";
-      document.getElementById("forecastResult").innerText = "";
-    }
-
-    function updateTotals() {
-      const currency = document.getElementById("defaultCurrency").value;
-      let income = 0, expense = 0;
+    function drawChart() {
+      const ctx = document.getElementById('summaryChart').getContext('2d');
+      const totals = { income: 0, expense: 0 };
 
       entries.forEach(e => {
-        let amt = convert(e.amount, e.currency, currency);
-        if (e.period === "yearly") amt = amt / 12;
-        if (e.period === "one-time") amt = amt; // count as-is for 1 month
-
-        if (e.type === "income") income += amt;
-        else expense += amt;
+        if (e.type === 'income') totals.income += e.amount;
+        else totals.expense += e.amount;
       });
 
-      document.getElementById("totals").innerText =
-        `💵 Total Income (monthly impact): ${income.toFixed(2)} ${currency}
-         \n💸 Total Expenses (monthly impact): ${expense.toFixed(2)} ${currency}
-         \n📊 Net Monthly: ${(income - expense).toFixed(2)} ${currency}`;
-    }
-
-    function calculateOneMonthNet() {
-      const currency = document.getElementById("defaultCurrency").value;
-      let income = 0, expense = 0;
-
-      entries.forEach(e => {
-        let amt = convert(e.amount, e.currency, currency);
-        if (e.period === "yearly") amt = amt / 12;
-        if (e.period === "one-time") amt = amt;
-
-        if (e.type === "income") income += amt;
-        else expense += amt;
+      new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Income', 'Expense'],
+          datasets: [{
+            data: [totals.income, totals.expense],
+            backgroundColor: ['#22c55e', '#ef4444']
+          }]
+        }
       });
-
-      const net = income - expense;
-      document.getElementById("oneMonthNetResult").innerText =
-        `✅ After 1 month, your net will be: ${net.toFixed(2)} ${currency}`;
     }
 
-    function forecastBalance() {
-      const month = parseInt(document.getElementById("forecastMonth").value);
-      const year = parseInt(document.getElementById("forecastYear").value);
-      const currency = document.getElementById("defaultCurrency").value;
-      const now = new Date();
-      const future = new Date(year, month);
-      if (future < now) {
-        document.getElementById("forecastResult").innerText = "❌ Please select a future date.";
-        return;
-      }
-
-      const monthsDiff = (year - now.getFullYear()) * 12 + (month - now.getMonth());
-      let income = 0, expense = 0;
-
-      entries.forEach(e => {
-        let amt = convert(e.amount, e.currency, currency);
-        if (e.period === "monthly") amt *= monthsDiff;
-        else if (e.period === "yearly") amt *= (monthsDiff / 12);
-        else if (e.period === "one-time") amt = amt;
-
-        if (e.type === "income") income += amt;
-        else expense += amt;
-      });
-
-      const forecast = income - expense;
-      document.getElementById("forecastResult").innerText =
-        `📅 Forecast by ${future.toLocaleString('default', { month: 'long' })} ${year}: ${forecast.toFixed(2)} ${currency}`;
-    }
-
-    function downloadExcel() {
-      if (entries.length === 0) return alert("No entries to export.");
-
-      const data = entries.map(e => ({
-        Name: e.name,
-        Amount: e.amount,
-        Currency: e.currency,
-        Period: e.period,
-        Type: e.type
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(data);
+    function exportToExcel() {
+      const worksheetData = [
+        ["Name", "Type", "Amount", "Month", "Year"],
+        ...entries.map(e => [e.name, e.type, e.amount, e.month + 1, e.year])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Finance");
+      XLSX.utils.book_append_sheet(wb, ws, "Entries");
       XLSX.writeFile(wb, "financial_tracker.xlsx");
     }
+
+    function populateMonthSelects() {
+      const monthNames = [...Array(12).keys()].map(m => new Date(0, m).toLocaleString('default', { month: 'long' }));
+      const selects = ["month", "compMonthA", "compMonthB"];
+      selects.forEach(id => {
+        const sel = document.getElementById(id);
+        monthNames.forEach((name, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = name;
+          sel.appendChild(opt);
+        });
+      });
+    }
+
+    function compareMonths() {
+      const mA = parseInt(document.getElementById("compMonthA").value);
+      const yA = parseInt(document.getElementById("compYearA").value);
+      const mB = parseInt(document.getElementById("compMonthB").value);
+      const yB = parseInt(document.getElementById("compYearB").value);
+
+      const totalA = { income: 0, expense: 0 };
+      const totalB = { income: 0, expense: 0 };
+
+      entries.forEach(e => {
+        if (e.month === mA && e.year === yA) totalA[e.type] += e.amount;
+        if (e.month === mB && e.year === yB) totalB[e.type] += e.amount;
+      });
+
+      const netA = totalA.income - totalA.expense;
+      const netB = totalB.income - totalB.expense;
+
+      const labelA = new Date(yA, mA).toLocaleString('default', { month: 'long', year: 'numeric' });
+      const labelB = new Date(yB, mB).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      const result = `
+        <h4>${labelA}</h4>
+        Income: <strong>${totalA.income}</strong>, Expense: <strong>${totalA.expense}</strong>, Net: <strong>${netA}</strong><br>
+        <h4>${labelB}</h4>
+        Income: <strong>${totalB.income}</strong>, Expense: <strong>${totalB.expense}</strong>, Net: <strong>${netB}</strong>
+      `;
+      document.getElementById("comparisonResult").innerHTML = result;
+
+      const ctx = document.getElementById("comparisonChart").getContext("2d");
+      if (comparisonChartInstance) comparisonChartInstance.destroy();
+
+      comparisonChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Income', 'Expense', 'Net'],
+          datasets: [
+            {
+              label: labelA,
+              data: [totalA.income, totalA.expense, netA],
+              backgroundColor: '#3b82f6'
+            },
+            {
+              label: labelB,
+              data: [totalB.income, totalB.expense, netB],
+              backgroundColor: '#10b981'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    populateMonthSelects();
   </script>
 </body>
 </html>
